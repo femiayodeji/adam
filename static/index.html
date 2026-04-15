@@ -146,6 +146,22 @@
     display: flex;
     flex-direction: column;
     flex-shrink: 0;
+    position: relative;
+  }
+
+  .panel::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: url('/static/assets/ainetic.gif') center/cover no-repeat;
+    opacity: 0.12;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .panel > * {
+    position: relative;
+    z-index: 1;
   }
 
   .panel-section {
@@ -206,20 +222,7 @@
     font-size: 0.65rem;
   }
 
-  /* ── Bone debug panel ── */
-  #bone-list {
-    font-size: 0.62rem;
-    color: var(--muted);
-    max-height: 120px;
-    overflow-y: auto;
-    scrollbar-width: thin;
-    scrollbar-color: var(--border) transparent;
-    line-height: 1.8;
-  }
 
-  .bone-item { display: flex; justify-content: space-between; }
-  .bone-item.active { color: var(--accent); }
-  .bone-val { color: var(--text); }
 
   /* ── Input area ── */
   .input-area {
@@ -337,12 +340,6 @@
     </div>
     <div id="log">
       <div class="log-entry system">Awaiting connection...</div>
-    </div>
-
-    <!-- bone debug -->
-    <div class="panel-section">
-      <div class="section-label">Active bones</div>
-      <div id="bone-list">—</div>
     </div>
 
     <!-- input -->
@@ -600,7 +597,6 @@ function resetPose() {
     const rest = boneRestQuaternions[name];
     obj.quaternion.copy(rest);
   }
-  document.getElementById('bone-list').innerHTML = '—';
   document.getElementById('keyframe-label').textContent = 'FRAME --/--';
   logEntry('system', 'Pose reset to neutral.');
 }
@@ -703,13 +699,7 @@ function logEntry(type, text) {
 }
 
 function updateBoneDebug(bones) {
-  const el = document.getElementById('bone-list');
-  el.innerHTML = bones.slice(0, 12).map(b => {
-    const r = b.rotation || {};
-    const vals = [r.x, r.y, r.z].filter(v => v !== undefined && v !== 0)
-      .map(v => v.toFixed(0) + '°').join(' ');
-    return `<div class="bone-item active"><span>${b.name}</span><span class="bone-val">${vals || '0°'}</span></div>`;
-  }).join('');
+  // bone debug panel removed
 }
 
 function sendCommand() {
