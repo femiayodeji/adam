@@ -1,0 +1,28 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Environment variables
+.env
+
+# uv
+uv.lock
+
+# IDE
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 3D model files (large binaries)
+static/models/*.glb
+static/models/*.gltf
+static/models/*.fbx

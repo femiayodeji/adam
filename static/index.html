@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ADAM - Robot Brain Interface</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;700;800&display=swap');
+
+  :root {
+    --bg: #09090f;
+    --surface: #111118;
+    --border: #1e1e2e;
+    --accent: #00ff88;
+    --accent2: #7c3aed;
+    --text: #e2e8f0;
+    --muted: #4a4a6a;
+    --danger: #ff4466;
+    --panel-w: 340px;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── Header ── */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    height: 52px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    flex-shrink: 0;
+    z-index: 10;
+  }
+
+  .logo {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 1.2rem;
+    letter-spacing: 0.2em;
+    color: var(--accent);
+    text-transform: uppercase;
+  }
+
+  .logo span { color: var(--muted); font-weight: 400; font-size: 0.75rem; margin-left: 12px; letter-spacing: 0.05em; }
+
+  .status-pill {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.7rem;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+  }
+
+  .status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--muted);
+    transition: background 0.3s;
+  }
+  .status-dot.connected { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+  .status-dot.thinking { background: #ffaa00; box-shadow: 0 0 8px #ffaa00; animation: pulse 0.8s infinite; }
+
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  /* ── Main layout ── */
+  .main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* ── Canvas area ── */
+  #canvas-wrap {
+    flex: 1;
+    position: relative;
+    background: radial-gradient(ellipse at 50% 60%, #0d0d1f 0%, var(--bg) 70%);
+  }
+
+  #three-canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  /* grid overlay */
+  #canvas-wrap::before {
+    content: '';
+    position: absolute; inset: 0;
+    background-image:
+      linear-gradient(var(--border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 40px 40px;
+    opacity: 0.3;
+    pointer-events: none;
+  }
+
+  /* corner labels */
+  .corner-label {
+    position: absolute;
+    font-size: 0.6rem;
+    color: var(--muted);
+    letter-spacing: 0.15em;
+  }
+  .corner-label.tl { top: 16px; left: 16px; }
+  .corner-label.tr { top: 16px; right: 16px; }
+  .corner-label.bl { bottom: 16px; left: 16px; }
+  .corner-label.br { bottom: 16px; right: 16px; }
+
+  /* motion label */
+  #motion-label {
+    position: absolute;
+    bottom: 48px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.7);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    padding: 8px 16px;
+    font-size: 0.75rem;
+    color: var(--accent);
+    letter-spacing: 0.1em;
+    opacity: 0;
+    transition: opacity 0.4s;
+    white-space: nowrap;
+  }
+  #motion-label.visible { opacity: 1; }
+
+  /* ── Right panel ── */
+  .panel {
+    width: var(--panel-w);
+    background: var(--surface);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+  }
+
+  .panel-section {
+    padding: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .section-label {
+    font-size: 0.6rem;
+    letter-spacing: 0.2em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+
+  /* ── Command log ── */
+  #log {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+
+  .log-entry {
+    font-size: 0.72rem;
+    line-height: 1.5;
+    padding: 8px 10px;
+    border-radius: 2px;
+    animation: fadeIn 0.2s ease;
+  }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:none} }
+
+  .log-entry.user {
+    background: rgba(124,58,237,0.12);
+    border-left: 2px solid var(--accent2);
+    color: #c4b5fd;
+  }
+
+  .log-entry.robot {
+    background: rgba(0,255,136,0.06);
+    border-left: 2px solid var(--accent);
+    color: var(--accent);
+  }
+
+  .log-entry.error {
+    background: rgba(255,68,102,0.08);
+    border-left: 2px solid var(--danger);
+    color: var(--danger);
+  }
+
+  .log-entry.system {
+    color: var(--muted);
+    font-style: italic;
+    font-size: 0.65rem;
+  }
+
+  /* ── Bone debug panel ── */
+  #bone-list {
+    font-size: 0.62rem;
+    color: var(--muted);
+    max-height: 120px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+    line-height: 1.8;
+  }
+
+  .bone-item { display: flex; justify-content: space-between; }
+  .bone-item.active { color: var(--accent); }
+  .bone-val { color: var(--text); }
+
+  /* ── Input area ── */
+  .input-area {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    border-top: 1px solid var(--border);
+  }
+
+  #cmd-input {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    font-size: 0.78rem;
+    padding: 10px 12px;
+    resize: none;
+    outline: none;
+    border-radius: 2px;
+    line-height: 1.5;
+    transition: border-color 0.2s;
+  }
+  #cmd-input:focus { border-color: var(--accent); }
+  #cmd-input::placeholder { color: var(--muted); }
+
+  .btn-row { display: flex; gap: 8px; }
+
+  button {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+    padding: 8px 14px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    border-radius: 2px;
+    transition: all 0.15s;
+    text-transform: uppercase;
+  }
+
+  #send-btn {
+    flex: 1;
+    background: var(--accent);
+    color: var(--bg);
+    border-color: var(--accent);
+    font-weight: 700;
+  }
+  #send-btn:hover { background: #00cc6a; }
+  #send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  #reset-btn:hover { border-color: var(--danger); color: var(--danger); }
+
+  /* ── Quick commands ── */
+  .quick-cmds {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .quick-btn {
+    font-size: 0.6rem;
+    padding: 5px 10px;
+    border-color: var(--border);
+  }
+  .quick-btn:hover { border-color: var(--accent2); color: #c4b5fd; }
+
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">ADAM <span>/ Neural Motor Interface v0.1</span></div>
+  <div class="status-pill">
+    <div class="status-dot" id="status-dot"></div>
+    <span id="status-text">DISCONNECTED</span>
+  </div>
+</header>
+
+<div class="main">
+
+  <!-- 3D Viewport -->
+  <div id="canvas-wrap">
+    <canvas id="three-canvas"></canvas>
+    <div class="corner-label tl">VIEW / PERSPECTIVE</div>
+    <div class="corner-label tr" id="fps-label">-- FPS</div>
+    <div class="corner-label bl">DRAG TO ORBIT · SCROLL TO ZOOM</div>
+    <div class="corner-label br" id="keyframe-label">FRAME --/--</div>
+    <div id="motion-label">IDLE</div>
+  </div>
+
+  <!-- Right Panel -->
+  <div class="panel">
+
+    <!-- quick commands -->
+    <div class="quick-cmds">
+      <div class="section-label" style="width:100%;margin-bottom:4px">Quick commands</div>
+      <button class="quick-btn" onclick="quickSend('wave your right hand')">Wave</button>
+      <button class="quick-btn" onclick="quickSend('jump')">Jump</button>
+      <button class="quick-btn" onclick="quickSend('bend down and touch the floor')">Bend</button>
+      <button class="quick-btn" onclick="quickSend('walk in place')">Walk</button>
+      <button class="quick-btn" onclick="quickSend('roll your head slowly')">Head roll</button>
+      <button class="quick-btn" onclick="quickSend('do a T-pose')">T-Pose</button>
+      <button class="quick-btn" onclick="quickSend('raise both arms above your head')">Arms up</button>
+      <button class="quick-btn" onclick="quickSend('idle breathing')">Idle</button>
+    </div>
+
+    <!-- log -->
+    <div class="panel-section" style="padding-bottom:6px">
+      <div class="section-label">Command log</div>
+    </div>
+    <div id="log">
+      <div class="log-entry system">Awaiting connection...</div>
+    </div>
+
+    <!-- bone debug -->
+    <div class="panel-section">
+      <div class="section-label">Active bones</div>
+      <div id="bone-list">—</div>
+    </div>
+
+    <!-- input -->
+    <div class="input-area">
+      <textarea id="cmd-input" rows="2" placeholder="Tell the robot what to do..."></textarea>
+      <div class="btn-row">
+        <button id="reset-btn" onclick="resetPose()">Reset</button>
+        <button id="send-btn" onclick="sendCommand()">Send ↵</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Three.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+
+<script>
+// ─────────────────────────────────────────────
+// Three.js scene setup
+// ─────────────────────────────────────────────
+const canvas = document.getElementById('three-canvas');
+const wrap = document.getElementById('canvas-wrap');
+
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+const scene = new THREE.Scene();
+
+const camera = new THREE.PerspectiveCamera(45, 1, 0.01, 100);
+camera.position.set(0, 1.6, 3.2);
+camera.lookAt(0, 1, 0);
+
+// Lights
+const ambient = new THREE.AmbientLight(0x8888ff, 0.4);
+scene.add(ambient);
+
+const keyLight = new THREE.DirectionalLight(0xffffff, 1.2);
+keyLight.position.set(2, 5, 3);
+keyLight.castShadow = true;
+scene.add(keyLight);
+
+const rimLight = new THREE.DirectionalLight(0x00ff88, 0.4);
+rimLight.position.set(-3, 3, -2);
+scene.add(rimLight);
+
+const fillLight = new THREE.PointLight(0x7c3aed, 0.6, 8);
+fillLight.position.set(-1.5, 1, 1);
+scene.add(fillLight);
+
+// Floor
+const floorGeo = new THREE.PlaneGeometry(10, 10);
+const floorMat = new THREE.MeshStandardMaterial({ color: 0x0a0a12, roughness: 1 });
+const floor = new THREE.Mesh(floorGeo, floorMat);
+floor.rotation.x = -Math.PI / 2;
+floor.receiveShadow = true;
+scene.add(floor);
+
+// ─────────────────────────────────────────────
+// Load GLTF humanoid model (Mixamo Xbot)
+// ─────────────────────────────────────────────
+const boneObjects = {};
+const boneRestQuaternions = {};
+
+const KNOWN_BONES = [
+  'Hips', 'Spine', 'Spine1', 'Spine2', 'Neck', 'Head',
+  'LeftShoulder', 'LeftArm', 'LeftForeArm', 'LeftHand',
+  'RightShoulder', 'RightArm', 'RightForeArm', 'RightHand',
+  'LeftUpLeg', 'LeftLeg', 'LeftFoot', 'LeftToeBase',
+  'RightUpLeg', 'RightLeg', 'RightFoot', 'RightToeBase',
+];
+
+const gltfLoader = new THREE.GLTFLoader();
+console.log('[ADAM] Loading model...');
+gltfLoader.load('/static/models/Xbot.glb', function(gltf) {
+  const model = gltf.scene;
+  const allBoneNames = [];
+  model.traverse(function(obj) {
+    if (obj.isMesh) {
+      obj.castShadow = true;
+      obj.receiveShadow = true;
+    }
+    // Log ALL bones/nodes for debugging
+    if (obj.isBone || obj.type === 'Bone') {
+      allBoneNames.push(obj.name);
+      let name = obj.name;
+      if (name.startsWith('mixamorig')) name = name.slice('mixamorig'.length);
+      if (KNOWN_BONES.includes(name)) {
+        boneObjects[name] = obj;
+        boneRestQuaternions[name] = obj.quaternion.clone();
+      }
+    }
+  });
+  scene.add(model);
+  console.log('[ADAM] All bones in model:', allBoneNames);
+  console.log('[ADAM] Mapped bones:', Object.keys(boneObjects));
+  console.log('[ADAM] Mapped count:', Object.keys(boneObjects).length);
+  logEntry('system', 'Model loaded — ' + Object.keys(boneObjects).length + '/' + allBoneNames.length + ' bones mapped.');
+
+  // Force a quick test: rotate LeftArm to verify bones work
+  if (boneObjects['LeftArm']) {
+    console.log('[ADAM] Test: rotating LeftArm');
+    const rest = boneRestQuaternions['LeftArm'];
+    const testOffset = offsetQuat(0, 0, 45);
+    boneObjects['LeftArm'].quaternion.copy(rest).multiply(testOffset);
+    setTimeout(() => {
+      boneObjects['LeftArm'].quaternion.copy(rest);
+      console.log('[ADAM] Test: LeftArm reset');
+    }, 2000);
+  } else {
+    console.warn('[ADAM] LeftArm not found in boneObjects!');
+  }
+}, function(progress) {
+  console.log('[ADAM] Loading progress:', progress.loaded, '/', progress.total);
+}, function(err) {
+  console.error('[ADAM] Model load error:', err);
+  logEntry('error', 'Failed to load model: ' + err.message);
+});
+
+// Helper: build a quaternion from degree offsets (Euler XYZ)
+function offsetQuat(rx, ry, rz) {
+  const euler = new THREE.Euler(
+    THREE.MathUtils.degToRad(rx),
+    THREE.MathUtils.degToRad(ry),
+    THREE.MathUtils.degToRad(rz),
+    'XYZ'
+  );
+  return new THREE.Quaternion().setFromEuler(euler);
+}
+
+// ─────────────────────────────────────────────
+// Orbit controls (manual — no OrbitControls import needed)
+// ─────────────────────────────────────────────
+let isDragging = false, lastX = 0, lastY = 0;
+let orbitTheta = 0, orbitPhi = Math.PI / 8, orbitRadius = 3.2;
+const orbitTarget = new THREE.Vector3(0, 1, 0);
+
+canvas.addEventListener('mousedown', e => { isDragging = true; lastX = e.clientX; lastY = e.clientY; });
+window.addEventListener('mouseup', () => isDragging = false);
+window.addEventListener('mousemove', e => {
+  if (!isDragging) return;
+  orbitTheta -= (e.clientX - lastX) * 0.01;
+  orbitPhi   -= (e.clientY - lastY) * 0.005;
+  orbitPhi    = Math.max(0.1, Math.min(Math.PI / 2, orbitPhi));
+  lastX = e.clientX; lastY = e.clientY;
+  updateCamera();
+});
+canvas.addEventListener('wheel', e => {
+  orbitRadius = Math.max(1.5, Math.min(6, orbitRadius + e.deltaY * 0.005));
+  updateCamera();
+});
+
+function updateCamera() {
+  camera.position.set(
+    orbitTarget.x + orbitRadius * Math.sin(orbitPhi) * Math.sin(orbitTheta),
+    orbitTarget.y + orbitRadius * Math.cos(orbitPhi),
+    orbitTarget.z + orbitRadius * Math.sin(orbitPhi) * Math.cos(orbitTheta)
+  );
+  camera.lookAt(orbitTarget);
+}
+
+// ─────────────────────────────────────────────
+// Animation engine
+// ─────────────────────────────────────────────
+let currentMotion   = null;
+let animStartTime   = null;
+let animLoop        = false;
+let animDuration    = 1;
+let currentKeyframes = [];
+let activeBoneNames  = [];
+
+function applyBoneRotations(bones) {
+  activeBoneNames = [];
+  for (const b of bones) {
+    const obj = boneObjects[b.name];
+    if (!obj) continue;
+    const rest = boneRestQuaternions[b.name];
+    const r = b.rotation || {};
+    const offset = offsetQuat(r.x || 0, r.y || 0, r.z || 0);
+    obj.quaternion.copy(rest).multiply(offset);
+    activeBoneNames.push(b.name);
+  }
+  updateBoneDebug(bones);
+}
+
+function lerpBoneRotations(kfA, kfB, t) {
+  const mapA = Object.fromEntries(kfA.bones.map(b => [b.name, b.rotation || {}]));
+  const mapB = Object.fromEntries(kfB.bones.map(b => [b.name, b.rotation || {}]));
+  const allNames = [...new Set([...Object.keys(mapA), ...Object.keys(mapB)])];
+
+  activeBoneNames = [];
+  for (const name of allNames) {
+    const obj = boneObjects[name];
+    if (!obj) continue;
+    const rest = boneRestQuaternions[name];
+    const rA = mapA[name] || {};
+    const rB = mapB[name] || {};
+    const rx = THREE.MathUtils.lerp(rA.x || 0, rB.x || 0, t);
+    const ry = THREE.MathUtils.lerp(rA.y || 0, rB.y || 0, t);
+    const rz = THREE.MathUtils.lerp(rA.z || 0, rB.z || 0, t);
+    const offset = offsetQuat(rx, ry, rz);
+    obj.quaternion.copy(rest).multiply(offset);
+    activeBoneNames.push(name);
+  }
+}
+
+function tickAnimation(now) {
+  if (!currentKeyframes.length) return;
+
+  if (!animStartTime) animStartTime = now;
+  let elapsed = (now - animStartTime) / 1000;
+
+  if (animLoop) elapsed = elapsed % animDuration;
+  else elapsed = Math.min(elapsed, animDuration);
+
+  // find bracketing keyframes
+  const kfs = currentKeyframes;
+  let kfB = kfs.find(k => k.time > elapsed) || kfs[kfs.length - 1];
+  let kfBIdx = kfs.indexOf(kfB);
+  let kfA = kfs[Math.max(0, kfBIdx - 1)];
+
+  if (kfA === kfB) {
+    applyBoneRotations(kfA.bones);
+  } else {
+    const span = kfB.time - kfA.time;
+    const t = span === 0 ? 0 : (elapsed - kfA.time) / span;
+    lerpBoneRotations(kfA, kfB, Math.min(1, Math.max(0, t)));
+  }
+
+  // keyframe counter
+  document.getElementById('keyframe-label').textContent =
+    `KF ${kfBIdx + 1}/${kfs.length}`;
+}
+
+function playMotion(motion) {
+  currentKeyframes = motion.keyframes || [];
+  animLoop         = motion.loop || false;
+  animDuration     = motion.totalDuration || 1;
+  animStartTime    = null;
+
+  const label = document.getElementById('motion-label');
+  label.textContent = (motion.description || 'EXECUTING').toUpperCase();
+  label.classList.add('visible');
+  setTimeout(() => label.classList.remove('visible'), 3000);
+}
+
+function resetPose() {
+  currentKeyframes = [];
+  animStartTime    = null;
+  activeBoneNames  = [];
+  for (const [name, obj] of Object.entries(boneObjects)) {
+    const rest = boneRestQuaternions[name];
+    obj.quaternion.copy(rest);
+  }
+  document.getElementById('bone-list').innerHTML = '—';
+  document.getElementById('keyframe-label').textContent = 'FRAME --/--';
+  logEntry('system', 'Pose reset to neutral.');
+}
+
+// ─────────────────────────────────────────────
+// Render loop
+// ─────────────────────────────────────────────
+let frameCount = 0, lastFPSTime = performance.now();
+
+function resize() {
+  const w = wrap.clientWidth, h = wrap.clientHeight;
+  renderer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+resize();
+window.addEventListener('resize', resize);
+
+function animate(now) {
+  requestAnimationFrame(animate);
+  tickAnimation(now);
+  renderer.render(scene, camera);
+
+  frameCount++;
+  if (now - lastFPSTime > 1000) {
+    document.getElementById('fps-label').textContent = `${frameCount} FPS`;
+    frameCount = 0;
+    lastFPSTime = now;
+  }
+}
+animate(performance.now());
+
+// ─────────────────────────────────────────────
+// WebSocket
+// ─────────────────────────────────────────────
+let ws = null;
+
+function connectWS() {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  ws = new WebSocket(`${proto}://${location.host}/ws`);
+
+  ws.onopen = () => {
+    setStatus('connected', 'CONNECTED');
+  };
+
+  ws.onclose = () => {
+    setStatus('', 'DISCONNECTED');
+    setTimeout(connectWS, 3000);
+  };
+
+  ws.onerror = () => {
+    setStatus('', 'ERROR');
+  };
+
+  ws.onmessage = e => {
+    const msg = JSON.parse(e.data);
+
+    if (msg.type === 'thinking') {
+      setStatus('thinking', 'THINKING');
+      return;
+    }
+
+    setStatus('connected', 'CONNECTED');
+
+    if (msg.type === 'motion') {
+      const m = msg.motion;
+      logEntry('robot', `▶ ${m.description || 'motion received'} · ${m.keyframes?.length || 0} keyframes · loop:${m.loop}`);
+      playMotion(m);
+      setSendEnabled(true);
+    } else if (msg.type === 'error') {
+      logEntry('error', `Error: ${msg.message}`);
+      setSendEnabled(true);
+    }
+  };
+}
+
+connectWS();
+
+// ─────────────────────────────────────────────
+// UI helpers
+// ─────────────────────────────────────────────
+function setStatus(cls, text) {
+  const dot  = document.getElementById('status-dot');
+  const span = document.getElementById('status-text');
+  dot.className = 'status-dot ' + cls;
+  span.textContent = text;
+}
+
+function setSendEnabled(v) {
+  document.getElementById('send-btn').disabled = !v;
+}
+
+function logEntry(type, text) {
+  const log = document.getElementById('log');
+  const div = document.createElement('div');
+  div.className = `log-entry ${type}`;
+  div.textContent = text;
+  log.appendChild(div);
+  log.scrollTop = log.scrollHeight;
+}
+
+function updateBoneDebug(bones) {
+  const el = document.getElementById('bone-list');
+  el.innerHTML = bones.slice(0, 12).map(b => {
+    const r = b.rotation || {};
+    const vals = [r.x, r.y, r.z].filter(v => v !== undefined && v !== 0)
+      .map(v => v.toFixed(0) + '°').join(' ');
+    return `<div class="bone-item active"><span>${b.name}</span><span class="bone-val">${vals || '0°'}</span></div>`;
+  }).join('');
+}
+
+function sendCommand() {
+  const input = document.getElementById('cmd-input');
+  const cmd = input.value.trim();
+  if (!cmd) return;
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    logEntry('error', 'Not connected.');
+    return;
+  }
+  logEntry('user', `> ${cmd}`);
+  ws.send(JSON.stringify({ command: cmd }));
+  setSendEnabled(false);
+  setStatus('thinking', 'THINKING');
+  input.value = '';
+}
+
+function quickSend(cmd) {
+  document.getElementById('cmd-input').value = cmd;
+  sendCommand();
+}
+
+// Enter to send
+document.getElementById('cmd-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendCommand(); }
+});
+</script>
+</body>
+</html>
