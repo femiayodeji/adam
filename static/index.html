@@ -360,6 +360,11 @@
 
 <script>
 // ─────────────────────────────────────────────
+// Model config — change this path to switch models
+// ─────────────────────────────────────────────
+const MODEL_PATH = '/static/models/xbot.glb';
+
+// ─────────────────────────────────────────────
 // Three.js scene setup
 // ─────────────────────────────────────────────
 const canvas = document.getElementById('three-canvas');
@@ -417,7 +422,7 @@ const KNOWN_BONES = [
 
 const gltfLoader = new THREE.GLTFLoader();
 console.log('[ADAM] Loading model...');
-gltfLoader.load('/static/models/Xbot.glb', function(gltf) {
+gltfLoader.load(MODEL_PATH, function(gltf) {
   const model = gltf.scene;
   const allBoneNames = [];
   model.traverse(function(obj) {
