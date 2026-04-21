@@ -34,26 +34,33 @@ async def websocket_endpoint(websocket: WebSocket):
 
     try:
         while True:
-            data = await websocket.receive_text()
-            payload = json.loads(data)
-            command_text = payload.get("command", "")
-            log.info("WS command: %s", command_text)
+            try:
+                data = await websocket.receive_text()
+                payload = json.loads(data)
+                command_text = payload.get("command", "")
+                log.info("WS command: %s", command_text)
 
-            conversation_history.append({"role": "user", "content": command_text})
+                conversation_history.append({"role": "user", "content": command_text})
 
-            await websocket.send_json({"type": "thinking", "message": "Processing..."})
+                await websocket.send_json({"type": "thinking", "message": "Processing..."})
 
-            result = complete(conversation_history)
+                result = complete(conversation_history)
 
-            conversation_history.append({"role": "assistant", "content": result["raw"]})
-            save_history(app_state, conversation_history)
+                conversation_history.append({"role": "assistant", "content": result["raw"]})
+                save_history(app_state, conversation_history)
 
-            if result["ok"]:
-                await websocket.send_json({"type": "motion", "motion": result["motion"]})
-            else:
-                await websocket.send_json(
-                    {"type": "error", "message": "Failed to parse motion JSON"}
-                )
-
+                if result["ok"]:
+                    await websocket.send_json({"type": "motion", "motion": result["motion"]})
+                else:
+                    await websocket.send_json(
+                        {"type": "error", "message": "Failed to parse motion JSON"}
+                    )
+            except Exception as e:
+                log.error("WS error: %s", e, exc_info=True)
+                try:
+                    await websocket.send_json({"type": "error", "message": f"Internal error: {str(e)}"})
+                except Exception:
+                    # If sending error fails, break the loop
+                    break
     except WebSocketDisconnect:
         log.info("WS disconnected — session %s", session.id)
