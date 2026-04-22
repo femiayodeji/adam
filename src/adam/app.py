@@ -31,7 +31,14 @@ async def serve_frontend():
 
 
 def main():
-    uvicorn.run("adam.app:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run(
+        "adam.app:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=True,
+        ws_ping_interval=20,
+        ws_ping_timeout=15,
+    )
 
 
 if __name__ == "__main__":

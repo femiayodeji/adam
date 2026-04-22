@@ -52,6 +52,14 @@ All settings live in `.env`:
 | `LLM_API_KEY`   | API key for the provider                | `AIza...`                    |
 | `LLM_BASE_URL`  | Optional custom base URL                |                              |
 | `LLM_STREAM`    | Enable streaming (not yet used)         | `true`                       |
+| `LLM_MAX_TOKENS` | Max completion tokens requested from model | `768`                     |
+| `HISTORY_MAX_TOKENS` | Token budget for chat history only (recency window) | `1200`             |
+| `HISTORY_MAX_MESSAGES` | Max recent messages kept in LLM context | `8`                       |
+| `HISTORY_MESSAGE_MAX_CHARS` | Per-message truncation before sending to LLM | `180`            |
+| `MOTION_CACHE` | Enable LRU cache for repeated commands | `true`                         |
+| `MOTION_CACHE_SIZE` | Number of cached motions                | `50`                        |
+
+Tip: for Groq on-demand tiers, lower `LLM_MAX_TOKENS` and keep history compact (`HISTORY_MAX_MESSAGES`, `HISTORY_MESSAGE_MAX_CHARS`) to avoid request-too-large errors.
 
 ## How it works
 

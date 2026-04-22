@@ -26,3 +26,5 @@ Thumbs.db
 static/models/*.glb
 static/models/*.gltf
 static/models/*.fbx
+SPECS.md
+
