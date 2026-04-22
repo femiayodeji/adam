@@ -558,9 +558,6 @@ function groundFoot(footName, lowerName, upperName) {
   const cosA = Math.max(-1, Math.min(1, (L1 * L1 + D * D - L2 * L2) / (2 * L1 * D)));
   const A = Math.acos(cosA);
 
-  // Direction from upper to target
-  const dir = _ikScratch.target.clone().sub(_ikScratch.upper).normalize();
-
   // Rotate upper bone by A around its local X
   const correction = new THREE.Quaternion().setFromAxisAngle(
     new THREE.Vector3(1, 0, 0).applyQuaternion(upperBone.quaternion),

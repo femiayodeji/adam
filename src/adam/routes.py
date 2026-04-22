@@ -276,12 +276,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 
 @router.get("/api/sessions")
 async def list_sessions():
-    if isinstance(_store, MemoryStore):
-        return {"sessions": list(_store._store.keys())}
-    if isinstance(_store, FileStore):
-        files = list(_store._dir.glob("*.jsonl"))
-        return {"sessions": [f.stem for f in files]}
-    return {"sessions": []}
+    return {"sessions": _store.session_ids()}
 
 
 @router.delete("/api/sessions/{session_id}")

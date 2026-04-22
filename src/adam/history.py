@@ -11,13 +11,10 @@ description string is sent back to the LLM, reducing token usage ~90%.
 from __future__ import annotations
 
 import json
-import logging
 from pathlib import Path
 from typing import Protocol
 
 from adam.models import Message
-
-log = logging.getLogger("adam.history")
 
 
 # ── Store protocol ────────────────────────────────────────────────────────────
@@ -26,6 +23,7 @@ class HistoryStore(Protocol):
     def load(self, session_id: str) -> list[Message]: ...
     def append(self, session_id: str, msg: Message) -> None: ...
     def delete(self, session_id: str) -> None: ...
+    def session_ids(self) -> list[str]: ...
 
 
 class MemoryStore:
@@ -40,6 +38,9 @@ class MemoryStore:
 
     def delete(self, session_id: str) -> None:
         self._store.pop(session_id, None)
+
+    def session_ids(self) -> list[str]:
+        return list(self._store.keys())
 
 
 class FileStore:
@@ -80,6 +81,9 @@ class FileStore:
         p = self._path(session_id)
         if p.exists():
             p.unlink()
+
+    def session_ids(self) -> list[str]:
+        return [f.stem for f in self._dir.glob("*.jsonl")]
 
 
 # ── Context window builder ────────────────────────────────────────────────────
