@@ -1,16 +1,12 @@
-"""LLM completion — async, streaming-aware, with retry and Pydantic validation.
+"""LLM completion — async, with retry and Pydantic validation.
 
 Flow:
   complete_async(conversation) -> MotionPlan | None
-    1. asyncio.to_thread (non-streaming) or litellm.acompletion (streaming)
+    1. asyncio.to_thread via litellm.completion
     2. Strip code fences
     3. JSON parse — retry once on failure
     4. MotionPlan validation + rotation clamping
     5. Exponential backoff on RateLimitError (up to 3 attempts)
-
-Streaming (LLM_STREAM=true):
-    complete_streaming(conversation, on_token) yields tokens via callback and
-    returns MotionPlan | None when complete.
 """
 from __future__ import annotations
 
@@ -18,9 +14,6 @@ import asyncio
 import json
 import logging
 import re
-from collections.abc import Awaitable, Callable
-from copy import deepcopy
-from typing import Any, cast
 
 import litellm
 
@@ -72,49 +65,7 @@ def _llm_kwargs(messages: list[dict]) -> dict:
     if config.llm.base_url:
         kw["api_base"] = config.llm.base_url
 
-    _apply_prompt_caching(kw)
     return kw
-
-
-def _apply_prompt_caching(kw: dict) -> None:
-    """Apply prompt-caching hints only where supported.
-
-    Current support:
-      - Anthropic/Claude message prefix caching via cache_control + beta header
-
-    For unsupported providers this is a no-op.
-    """
-    if not config.llm.prompt_cache:
-        return
-
-    provider = config.llm.provider.lower()
-    model = config.llm.model.lower()
-    is_anthropic = "anthropic" in provider or "claude" in model
-    if not is_anthropic:
-        return
-
-    original_messages = kw.get("messages")
-    if not isinstance(original_messages, list) or not original_messages:
-        return
-
-    messages = deepcopy(original_messages)
-    last_index = len(messages) - 1
-
-    # Mark stable prefix content as cacheable; keep the final user turn uncached.
-    for idx, msg in enumerate(messages):
-        content = msg.get("content")
-        if not isinstance(content, str):
-            continue
-
-        text_block: dict = {"type": "text", "text": content}
-        if idx < last_index:
-            text_block["cache_control"] = {"type": "ephemeral"}
-        msg["content"] = [text_block]
-
-    kw["messages"] = messages
-    headers = kw.get("extra_headers") or {}
-    headers["anthropic-beta"] = "prompt-caching-2024-07-31"
-    kw["extra_headers"] = headers
 
 
 async def complete_async(
@@ -163,48 +114,4 @@ async def complete_async(
             await asyncio.sleep(wait)
 
     return None
-
-
-async def complete_streaming(
-    conversation: list[dict],
-    on_token: Callable[[str], Awaitable[None]],
-    last_description: str | None = None,
-) -> MotionPlan | None:
-    """Streaming completion. Calls on_token for each delta chunk.
-    Returns a MotionPlan on success, None on failure."""
-    messages = [
-        {"role": "system", "content": build_system_prompt(last_description)},
-        *conversation,
-    ]
-    kw = _llm_kwargs(messages)
-    kw["stream"] = True
-
-    accumulated = ""
-    for attempt in range(3):
-        try:
-            stream = await litellm.acompletion(**kw)
-            async for chunk in cast(Any, stream):
-                delta = (chunk.choices[0].delta.content or "") if chunk.choices else ""  # type: ignore[union-attr]
-                if delta:
-                    accumulated += delta
-                    await on_token(delta)
-            break  # stream complete
-
-        except Exception as exc:
-            if not _is_rate_limited(exc):
-                raise
-            if attempt == 2:
-                raise
-            wait = min(2 ** attempt, 16)
-            log.warning("Rate limited (streaming) — retrying in %d s", wait)
-            await asyncio.sleep(wait)
-            accumulated = ""
-
-    raw = _strip_fences(accumulated)
-    plan = _parse(raw)
-    if plan:
-        log.info("Streamed motion: %s", plan.description)
-    else:
-        log.error("Streaming produced invalid JSON: %.200s", raw)
-    return plan
 

@@ -21,8 +21,8 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from adam.cache import MotionCache
 from adam.config import config
-from adam.history import FileStore, MemoryStore, build_context
-from adam.llm import complete_async, complete_streaming
+from adam.history import MemoryStore, build_context
+from adam.llm import complete_async
 from adam.models import Message, MotionPlan
 from adam.state import Session
 
@@ -31,11 +31,7 @@ log = logging.getLogger("adam.routes")
 router = APIRouter()
 
 # ── Shared singletons ─────────────────────────────────────────────────────────
-_store = (
-    FileStore(config.history.history_dir)
-    if config.history.persistent and config.history.history_dir
-    else MemoryStore()
-)
+_store = MemoryStore()
 _cache = MotionCache(capacity=config.cache.capacity) if config.cache.enabled else None
 
 log.info(
@@ -129,16 +125,7 @@ async def _run_command(
     plan: MotionPlan | None = None
 
     try:
-        if config.llm.stream:
-            async def _on_token(delta: str) -> None:
-                try:
-                    await websocket.send_json(_v1("token", msg_id, delta=delta))
-                except Exception:
-                    pass
-
-            plan = await complete_streaming(context, _on_token, last_desc)
-        else:
-            plan = await complete_async(context, last_desc)
+        plan = await complete_async(context, last_desc)
 
     except asyncio.CancelledError:
         log.info("LLM task cancelled (session %s)", session.id)

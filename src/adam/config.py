@@ -13,8 +13,6 @@ class LLMConfig:
     model: str
     api_key: str
     base_url: str | None
-    stream: bool
-    prompt_cache: bool
     temperature: float
     max_tokens: int
     timeout_s: int
@@ -23,7 +21,6 @@ class LLMConfig:
 @dataclass
 class HistoryConfig:
     history_dir: Path | None
-    persistent: bool
     max_history_tokens: int
     max_history_messages: int
     max_message_chars: int
@@ -55,15 +52,12 @@ def load_config() -> Config:
             model=os.environ.get("LLM_MODEL", "gemini/gemini-2.0-flash"),
             api_key=os.environ.get("LLM_API_KEY", ""),
             base_url=os.environ.get("LLM_BASE_URL") or None,
-            stream=_env_bool("LLM_STREAM", False),
-            prompt_cache=_env_bool("LLM_PROMPT_CACHE", True),
             temperature=float(os.environ.get("LLM_TEMPERATURE", "0.4")),
-            max_tokens=int(os.environ.get("LLM_MAX_TOKENS", "768")),
+            max_tokens=int(os.environ.get("LLM_MAX_TOKENS", "2048")),
             timeout_s=int(os.environ.get("LLM_TIMEOUT_S", "30")),
         ),
         history=HistoryConfig(
             history_dir=Path(raw_dir) if raw_dir else None,
-            persistent=_env_bool("HISTORY_PERSIST", False),
             max_history_tokens=int(os.environ.get("HISTORY_MAX_TOKENS", "1200")),
             max_history_messages=int(os.environ.get("HISTORY_MAX_MESSAGES", "8")),
             max_message_chars=int(os.environ.get("HISTORY_MESSAGE_MAX_CHARS", "180")),
