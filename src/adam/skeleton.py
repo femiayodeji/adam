@@ -1,16 +1,18 @@
 # ─── Skeleton map for Mixamo Xbot (T-pose rest) ───
 # All rotations are OFFSETS from T-pose (degrees). 0 = rest/T-pose.
 # "note" tells the LLM what each axis does in plain English.
+# This rig represents a full-body humanoid. Motions should be planned as human
+# movement using the available major joints, even when the request is complex.
 SKELETON_MAP = {
     "Hips": {
         "axes": ["x", "y", "z"],
         "range": {"x": [-35, 35], "y": [-180, 180], "z": [-35, 35]},
-        "note": "Root pelvis. x: tilt fwd(+)/back(−). y: rotate whole body left(+)/right(−). z: tilt sideways."
+        "note": "Root pelvis. x: tilt fwd(+)/back(−). y: rotate whole body left(+)/right(−). z: tilt sideways. Use for balance, crouching, turns, gait, and weight transfer."
     },
     "Spine": {
         "axes": ["x", "y", "z"],
         "range": {"x": [-40, 40], "y": [-30, 30], "z": [-20, 20]},
-        "note": "Lower torso. x: bend fwd(+)/back(−). y: twist torso. z: side bend."
+        "note": "Lower torso. x: bend fwd(+)/back(−). y: twist torso. z: side bend. Coordinate with Spine1 and Spine2 for realistic human bending."
     },
     "Spine1": {
         "axes": ["x", "y", "z"],
@@ -40,7 +42,7 @@ SKELETON_MAP = {
     "LeftArm": {
         "axes": ["x", "y", "z"],
         "range": {"x": [-80, 80], "y": [-90, 90], "z": [-90, 180]},
-        "note": "Upper arm. T-pose=0. x: swing fwd(+)/back(−). y: twist/roll. z: raise overhead(+)/lower to side(−). −90z = arm hanging at side."
+        "note": "Upper arm. T-pose=0. x: swing fwd(+)/back(−). y: twist/roll. z: raise overhead(+)/lower to side(−). −90z = arm hanging at side. Combine with shoulder, forearm, hand, spine, and hips for reaching and expressive human gestures."
     },
     "LeftForeArm": {
         "axes": ["x", "y"],
@@ -60,7 +62,7 @@ SKELETON_MAP = {
     "RightArm": {
         "axes": ["x", "y", "z"],
         "range": {"x": [-80, 80], "y": [-90, 90], "z": [-180, 90]},
-        "note": "Upper arm (mirror). x: fwd(+)/back(−). y: twist. z: raise overhead(−)/lower to side(+). +90z = arm hanging at side."
+        "note": "Upper arm (mirror). x: fwd(+)/back(−). y: twist. z: raise overhead(−)/lower to side(+). +90z = arm hanging at side. Combine with shoulder, forearm, hand, spine, and hips for reaching and expressive human gestures."
     },
     "RightForeArm": {
         "axes": ["x", "y"],
@@ -75,7 +77,7 @@ SKELETON_MAP = {
     "LeftUpLeg": {
         "axes": ["x", "y", "z"],
         "range": {"x": [-120, 35], "y": [-45, 45], "z": [-30, 45]},
-        "note": "Thigh. x: kick forward(−)/extend back(+). y: twist. z: spread outward(+)/inward(−)."
+        "note": "Thigh. x: kick forward(−)/extend back(+). y: twist. z: spread outward(+)/inward(−). Primary driver for walking, running, crouching, stepping, and jumping."
     },
     "LeftLeg": {
         "axes": ["x"],
@@ -100,7 +102,7 @@ SKELETON_MAP = {
     "RightLeg": {
         "axes": ["x"],
         "range": {"x": [0, 145]},
-        "note": "Knee (mirror). Same as LeftLeg."
+        "note": "Knee (mirror). Same as LeftLeg. Critical for stepping, landing, crouching, and human gait shock absorption."
     },
     "RightFoot": {
         "axes": ["x", "z"],

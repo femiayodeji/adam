@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from adam.skeleton import SKELETON_MAP
 
@@ -70,13 +70,43 @@ class MotionPlan(BaseModel):
                     b.rotation.z = max(ranges["z"][0], min(ranges["z"][1], b.rotation.z))
 
 
+class AnimationResponse(BaseModel):
+    animations: list[MotionPlan] = Field(min_length=1)
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalise_payload(cls, data: Any) -> Any:
+        if isinstance(data, list):
+            return {"animations": data}
+        if isinstance(data, dict) and "animations" not in data and "keyframes" in data:
+            return {"animations": [data]}
+        return data
+
+    def clamp_rotations(self) -> None:
+        for animation in self.animations:
+            animation.clamp_rotations()
+
+    @property
+    def primary(self) -> MotionPlan:
+        return self.animations[0]
+
+    @property
+    def summary_text(self) -> str:
+        return " -> ".join(animation.description for animation in self.animations)
+
+    def payload(self) -> dict[str, Any]:
+        data = self.model_dump()
+        data["motion"] = data["animations"][0]
+        return data
+
+
 # ── History models ────────────────────────────────────────────────────────────
 
 @dataclass
 class Message:
     role: Literal["user", "assistant"]
     # For user: raw command text.
-    # For assistant: motion description only (NOT the full JSON — saves ~90% tokens).
+    # For assistant: animation description summary only (NOT the full JSON — saves ~90% tokens).
     content: str
-    motion_summary: str | None = None   # full MotionPlan JSON string, stored but not sent to LLM
+    motion_summary: str | None = None   # full animation JSON string, stored but not sent to LLM
     timestamp: float = field(default_factory=time.time)

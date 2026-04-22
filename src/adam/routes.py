@@ -2,7 +2,7 @@
 
 WebSocket protocol (v1):
   Client → Server: { "v":1, "id":"<uuid>", "type":"command"|"ping"|"new_session"|"reset_pose", ... }
-  Server → Client: { "v":1, "ref":"<id>", "type":"ack"|"thinking"|"motion"|"error"|"pong"|"session" }
+    Server → Client: { "v":1, "ref":"<id>", "type":"ack"|"thinking"|"motion"|"error"|"pong"|"session", "animations":[...], "motion":{{...}} }
 
 Key behaviours:
   - Per-connection session (not global shared state)
@@ -23,7 +23,7 @@ from adam.cache import MotionCache
 from adam.config import config
 from adam.history import MemoryStore, build_context
 from adam.llm import complete_async
-from adam.models import Message, MotionPlan
+from adam.models import AnimationResponse, Message
 from adam.state import Session
 
 log = logging.getLogger("adam.routes")
@@ -55,10 +55,15 @@ def _last_description(messages: list[Message]) -> str | None:
     for msg in reversed(messages):
         if msg.role == "assistant" and msg.motion_summary:
             try:
-                return json.loads(msg.motion_summary).get("description")
+                summary = AnimationResponse.model_validate_json(msg.motion_summary)
+                return summary.animations[-1].description
             except Exception:
                 pass
     return None
+
+
+def _animation_frame(type_: str, ref: str, payload: AnimationResponse) -> dict:
+    return _v1(type_, ref, **payload.payload())
 
 
 def _start_command_task(
@@ -108,10 +113,10 @@ async def _run_command(
             log.info("Cache hit: %s", command_text[:60])
             _store.append(session.id, Message("user", command_text))
             _store.append(session.id, Message(
-                "assistant", cached.description,
+                "assistant", cached.summary_text,
                 motion_summary=cached.model_dump_json(),
             ))
-            await websocket.send_json(_v1("motion", msg_id, motion=cached.model_dump()))
+            await websocket.send_json(_animation_frame("motion", msg_id, cached))
             return
 
     context = build_context(
@@ -122,7 +127,7 @@ async def _run_command(
     )
     context.append({"role": "user", "content": command_text})
 
-    plan: MotionPlan | None = None
+    plan: AnimationResponse | None = None
 
     try:
         plan = await complete_async(context, last_desc)
@@ -142,14 +147,14 @@ async def _run_command(
     # Persist
     _store.append(session.id, Message("user", command_text))
     _store.append(session.id, Message(
-        "assistant", plan.description,
+        "assistant", plan.summary_text,
         motion_summary=plan.model_dump_json(),
     ))
 
     if _cache:
         _cache.put(command_text, plan)
 
-    await _safe_send(websocket, _v1("motion", msg_id, motion=plan.model_dump()))
+    await _safe_send(websocket, _animation_frame("motion", msg_id, plan))
 
 
 async def _safe_send(websocket: WebSocket, payload: dict) -> None:

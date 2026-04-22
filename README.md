@@ -1,7 +1,7 @@
 # ADAM — Robot Brain Interface
 
 A web app where an LLM acts as the motor cortex of a humanoid 3D robot.
-You speak/type natural language → the LLM generates bone rotation keyframes → the 3D model moves.
+You speak/type natural language → the LLM generates one or more human-like animation plans → the 3D model moves.
 
 Uses [litellm](https://github.com/BerriAI/litellm) so you can swap between providers (Gemini, Groq, Anthropic, OpenAI, etc.) by changing your `.env`.
 
@@ -57,17 +57,17 @@ All settings live in `.env`:
 | `HISTORY_MAX_MESSAGES` | Max recent messages kept in LLM context | `8`                       |
 | `HISTORY_MESSAGE_MAX_CHARS` | Per-message truncation before sending to LLM | `180`            |
 | `MOTION_CACHE` | Enable LRU cache for repeated commands | `true`                         |
-| `MOTION_CACHE_SIZE` | Number of cached motions                | `50`                        |
+| `MOTION_CACHE_SIZE` | Number of cached animation responses    | `50`                        |
 
 Tip: for Groq on-demand tiers, lower `LLM_MAX_TOKENS` and keep history compact (`HISTORY_MAX_MESSAGES`, `HISTORY_MESSAGE_MAX_CHARS`) to avoid request-too-large errors.
 
 ## How it works
 
-1. You type a command ("wave your right hand", "jump", "bend down and touch the floor")
+1. You type a command ("wave your right hand", "jump", "bend down and touch the floor", "step left then bow")
 2. The command goes over WebSocket to the FastAPI backend
 3. Backend calls the configured LLM (via litellm) with a system prompt containing the full skeleton bone map
-4. The LLM returns a JSON motion plan — an array of keyframes with bone rotations (in degrees)
-5. The frontend interpolates between keyframes and applies rotations to the procedural 3D humanoid
+4. The LLM returns a JSON animation response containing one or more motion plans, each with ordered keyframes and bone rotations (in degrees)
+5. The frontend plays the returned animations in sequence and applies rotations to the procedural 3D humanoid
 6. Conversation history is persisted per session so the LLM has context for follow-up commands
 
 ## API Endpoints
@@ -75,46 +75,96 @@ Tip: for Groq on-demand tiers, lower `LLM_MAX_TOKENS` and keep history compact (
 | Endpoint         | Method    | Description                          |
 |------------------|-----------|--------------------------------------|
 | `/`              | GET       | Serves index.html                    |
-| `/api/command`   | POST      | Single REST command → motion JSON    |
+| `/api/sessions`  | GET       | Lists known in-memory session ids    |
+| `/api/sessions/{session_id}` | DELETE | Deletes a stored session     |
+| `/api/sessions/{session_id}/reset` | POST | Clears a stored session |
 | `/ws`            | WebSocket | Real-time duplex command channel     |
 
-### REST example
+### WebSocket response schema
 
-```bash
-curl -X POST http://localhost:8000/api/command \
-  -H "Content-Type: application/json" \
-  -d '{"command": "raise both arms above your head"}'
-```
-
-### Motion JSON schema (what the LLM returns)
+The server sends motion frames shaped like this:
 
 ```json
 {
-  "description": "raising both arms overhead",
-  "keyframes": [
+  "v": 1,
+  "type": "motion",
+  "ref": "message-id",
+  "animations": [
     {
-      "time": 0.0,
-      "bones": [
-        { "name": "LeftArm",  "rotation": { "z": 0 } },
-        { "name": "RightArm", "rotation": { "z": 0 } }
-      ]
+      "description": "step left",
+      "keyframes": [
+        {
+          "time": 0.0,
+          "grounded": true,
+          "bones": [
+            { "name": "Hips", "rotation": { "z": 0 } }
+          ]
+        },
+        {
+          "time": 0.7,
+          "grounded": true,
+          "bones": [
+            { "name": "Hips", "rotation": { "z": 8 } },
+            { "name": "LeftUpLeg", "rotation": { "x": -18, "z": 12 } }
+          ]
+        }
+      ],
+      "loop": false,
+      "totalDuration": 0.7
     },
     {
-      "time": 0.6,
-      "bones": [
-        { "name": "LeftArm",  "rotation": { "z": 160 } },
-        { "name": "RightArm", "rotation": { "z": -160 } }
-      ]
+      "description": "bow",
+      "keyframes": [
+        {
+          "time": 0.0,
+          "grounded": true,
+          "bones": []
+        },
+        {
+          "time": 0.8,
+          "grounded": true,
+          "bones": [
+            { "name": "Spine", "rotation": { "x": 22 } },
+            { "name": "Spine1", "rotation": { "x": 18 } },
+            { "name": "Spine2", "rotation": { "x": 12 } }
+          ]
+        }
+      ],
+      "loop": false,
+      "totalDuration": 0.8
     }
   ],
-  "loop": false,
-  "totalDuration": 0.6
+  "motion": {
+    "description": "step left",
+    "keyframes": [
+      {
+        "time": 0.0,
+        "grounded": true,
+        "bones": [
+          { "name": "Hips", "rotation": { "z": 0 } }
+        ]
+      },
+      {
+        "time": 0.7,
+        "grounded": true,
+        "bones": [
+          { "name": "Hips", "rotation": { "z": 8 } },
+          { "name": "LeftUpLeg", "rotation": { "x": -18, "z": 12 } }
+        ]
+      }
+    ],
+    "loop": false,
+    "totalDuration": 0.7
+  }
 }
 ```
+
+`motion` is kept as a compatibility alias for the first animation. New clients should read `animations`.
 
 ## Extending
 
 - **Add a real GLTF model**: Replace the procedural mesh with `THREE.GLTFLoader` + a Mixamo export. The bone names in the system prompt already match the Mixamo rig convention.
 - **Add speech input**: Wire the Web Speech API to the input box for voice commands.
-- **Multi-step motions**: Ask for sequences like "walk forward then stop and wave" — the LLM will chain keyframes.
+- **Multi-step motions**: Ask for sequences like "walk forward then stop and wave" — the LLM can now return multiple ordered animations for one command.
+- **Human movement**: The prompt treats ADAM as a full-body humanoid, so whole-body actions like stepping, crouching, turning, balancing, and jumping are expected when the rig supports them.
 - **Switch providers**: Change `LLM_PROVIDER` and `LLM_MODEL` in `.env` to use any litellm-supported provider.

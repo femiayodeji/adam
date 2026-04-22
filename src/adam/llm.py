@@ -1,11 +1,11 @@
 """LLM completion — async, with retry and Pydantic validation.
 
 Flow:
-  complete_async(conversation) -> MotionPlan | None
+    complete_async(conversation) -> AnimationResponse | None
     1. asyncio.to_thread via litellm.completion
     2. Strip code fences
     3. JSON parse — retry once on failure
-    4. MotionPlan validation + rotation clamping
+        4. AnimationResponse validation + rotation clamping
     5. Exponential backoff on RateLimitError (up to 3 attempts)
 """
 from __future__ import annotations
@@ -18,7 +18,7 @@ import re
 import litellm
 
 from adam.config import config
-from adam.models import MotionPlan
+from adam.models import AnimationResponse
 from adam.prompt import build_system_prompt
 
 log = logging.getLogger("adam.llm")
@@ -31,10 +31,10 @@ def _strip_fences(text: str) -> str:
     return m.group(1).strip() if m else text.strip()
 
 
-def _parse(raw: str) -> MotionPlan | None:
+def _parse(raw: str) -> AnimationResponse | None:
     try:
         data = json.loads(raw)
-        plan = MotionPlan.model_validate(data)
+        plan = AnimationResponse.model_validate(data)
         plan.clamp_rotations()
         return plan
     except Exception as exc:
@@ -71,7 +71,7 @@ def _llm_kwargs(messages: list[dict]) -> dict:
 async def complete_async(
     conversation: list[dict],
     last_description: str | None = None,
-) -> MotionPlan | None:
+) -> AnimationResponse | None:
     """Non-streaming completion with retry logic."""
     messages = [
         {"role": "system", "content": build_system_prompt(last_description)},
@@ -87,7 +87,7 @@ async def complete_async(
 
             plan = _parse(raw)
             if plan is not None:
-                log.info("Motion: %s", plan.description)
+                log.info("Animations: %s", plan.summary_text)
                 return plan
 
             # Retry with correction hint on bad JSON

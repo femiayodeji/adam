@@ -598,6 +598,8 @@ let animStartTime   = null;
 let animLoop        = false;
 let animDuration    = 1;
 let currentKeyframes = [];
+let currentAnimation = null;
+let animationQueue = [];
 
 function applyBoneRotations(bones) {
   for (const b of bones) {
@@ -664,9 +666,21 @@ function tickAnimation(now) {
   applyFollowThrough();
 
   document.getElementById('keyframe-label').textContent = `KF ${kfBIdx + 1}/${kfs.length}`;
+
+  if (!animLoop && elapsed >= animDuration) {
+    const nextMotion = animationQueue.shift();
+    if (nextMotion) {
+      startMotion(nextMotion);
+    } else {
+      currentAnimation = null;
+      currentKeyframes = [];
+      animStartTime = null;
+    }
+  }
 }
 
-function playMotion(motion) {
+function startMotion(motion) {
+  currentAnimation   = motion;
   currentKeyframes = motion.keyframes || [];
   animLoop         = motion.loop || false;
   animDuration     = motion.totalDuration || 1;
@@ -678,7 +692,22 @@ function playMotion(motion) {
   setTimeout(() => label.classList.remove('visible'), 3000);
 }
 
+function playAnimations(animations) {
+  const queue = Array.isArray(animations) ? animations.filter(Boolean) : [];
+  if (!queue.length) return;
+
+  if (!currentAnimation || !currentKeyframes.length) {
+    startMotion(queue[0]);
+    animationQueue = queue.slice(1);
+    return;
+  }
+
+  animationQueue.push(...queue);
+}
+
 function resetPose() {
+  currentAnimation = null;
+  animationQueue = [];
   currentKeyframes = [];
   animStartTime    = null;
   for (const [name, obj] of Object.entries(boneObjects)) {
@@ -791,9 +820,12 @@ function connectWS() {
         setStatus('connected', 'CONNECTED');
         _inFlight = false;
         setSendEnabled(true);
-        const m = msg.motion;
-        logEntry('robot', `▶ ${m.description || 'motion received'} · ${m.keyframes?.length || 0} keyframes · loop:${m.loop}`);
-        playMotion(m);
+        const animations = Array.isArray(msg.animations)
+          ? msg.animations
+          : (msg.motion ? [msg.motion] : []);
+        const labels = animations.map(m => m.description || 'motion received').join(' -> ');
+        logEntry('robot', `▶ ${labels} · ${animations.length} animation(s)`);
+        playAnimations(animations);
         // Flush pending command
         if (_pendingCommand) {
           const next = _pendingCommand;

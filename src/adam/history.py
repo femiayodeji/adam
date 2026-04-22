@@ -6,7 +6,7 @@ HistoryStore protocol has two implementations:
 
 Context passed to the LLM is token-budgeted (rolling window).
 The full LLM JSON is stored in Message.motion_summary but only the
-description string is sent back to the LLM, reducing token usage ~90%.
+animation summary string is sent back to the LLM, reducing token usage ~90%.
 """
 from __future__ import annotations
 

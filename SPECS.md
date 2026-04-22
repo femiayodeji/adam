@@ -127,7 +127,7 @@ Conversion: `Euler(degToRad(x), degToRad(y), degToRad(z), 'XYZ')` → `Quaternio
 
 #### 2.1 LLM Call Interface
 ```
-complete(conversation: list[dict]) → MotionResult
+complete(conversation: list[dict]) → AnimationResult
 ```
 - Run in `asyncio.to_thread(litellm.completion, ...)` — never blocks the event loop
 - Parameters: `temperature=0.4`, `max_tokens=4096`, `response_format={"type": "json_object"}` (where provider supports it)
@@ -168,18 +168,22 @@ async def complete_with_retry(conversation, max_retries=3):
 #### 2.2 Output Schema (formal)
 ```jsonc
 {
-  "description": string,           // ≤ 60 chars, human-readable label
-  "keyframes": [
-    {
-      "time": number,              // seconds ≥ 0, keyframe 0 must be time=0
-      "easing": "linear"|"ease-in-out",  // optional, default ease-in-out
-      "bones": [
-        { "name": BoneName, "rotation": { "x": number, "y": number, "z": number } }
-      ]
-    }
-  ],
-  "loop": boolean,
-  "totalDuration": number          // seconds > 0
+    "animations": [
+        {
+            "description": string,           // ≤ 60 chars, human-readable label
+            "keyframes": [
+                {
+                    "time": number,              // seconds ≥ 0, keyframe 0 must be time=0
+                    "easing": "linear"|"ease-in-out",  // optional, default ease-in-out
+                    "bones": [
+                        { "name": BoneName, "rotation": { "x": number, "y": number, "z": number } }
+                    ]
+                }
+            ],
+            "loop": boolean,
+            "totalDuration": number          // seconds > 0
+        }
+    ]
 }
 ```
 
@@ -188,12 +192,12 @@ On each LLM response, before sending to client:
 
 1. **Code fence strip** — existing regex (keep)
 2. **JSON parse** — on failure: retry once with `"Your previous response was not valid JSON. Return only the JSON object."` appended
-3. **Schema validation** — Pydantic model `MotionPlan` with field constraints:
-   - `keyframes` must have ≥ 2 entries
-   - `keyframes[0].time == 0`
-   - All `bones[].name` must be in `KNOWN_BONES`
-   - All rotation values clamped to bone's declared range (warn but don't fail)
-   - `totalDuration > 0`
+3. **Schema validation** — top-level Pydantic model `AnimationResult` with `animations.length >= 1`, and each `MotionPlan` constrained such that:
+    - `keyframes` must have ≥ 2 entries
+    - `keyframes[0].time == 0`
+    - All `bones[].name` must be in `KNOWN_BONES`
+    - All rotation values clamped to bone's declared range (warn but don't fail)
+    - `totalDuration > 0`
 4. **On validation failure after retry** → return `{"ok": false, "error": "...", "raw": ...}`
 
 #### 2.4 Pydantic Models
@@ -217,6 +221,9 @@ class MotionPlan(BaseModel):
     keyframes: list[Keyframe]
     loop: bool = False
     totalDuration: float
+
+class AnimationResult(BaseModel):
+    animations: list[MotionPlan]
 ```
 
 #### 2.5 Provider Configuration
